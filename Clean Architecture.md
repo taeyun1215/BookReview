@@ -63,455 +63,180 @@
     10. application(port → in)
     11. adapter(out → persistence → mapper) Domain → ResponseDTO
     12. adapter(in → web)
-- 예시 코드 (User Register)
-    - RegisterUserRequest.java
-        
-        ```java
-        @Value
-        @EqualsAndHashCode(callSuper = false)
-        public class RegisterUserRequest extends SelfValidating<RegisterUserRequest> {
-        
-            @Pattern(
-                    regexp = "^[a-z0-9]{4,20}$",
-                    message = "아이디는 영어 소문자와 숫자만 사용하여 4~20자리여야 합니다."
-            )
-            @NotBlank(message = "아이디은 필수 입력 값입니다.")
-            private String username;
-        
-            @Pattern(
-                    regexp = "(?=.*[0-9])(?=.*[a-zA-Z])(?=.*\\W)(?=\\S+$).{8,16}",
-                    message = "비밀번호는 숫자,문자,특수문자를 포함한 6~18로 입력해주세요."
-            )
-            @NotBlank(message = "비밀번호는 필수 입력 값입니다.")
-            private String password;
-        
-            @NotBlank(message = "비밀번호 확인은 필수 입력 값입니다.")
-            private String confirmPassword;
-        
-            @Size(min = 2, max = 12, message = "아이디는 2 ~ 12 사이로 입력해주세요.")
-            @NotBlank(message = "닉네임은 필수 입력값입니다.")
-            private String nickname;
-        
-            @Pattern(
-                    regexp = "^(01[016789]{1})-?[0-9]{3,4}-?[0-9]{4}$",
-                    message = "전화번호 형식이 올바르지 않습니다."
-            )
-            @NotBlank(message = "전화번호는 필수 입력값입니다.")
-            private String phone;
-        
-            @Email
-            @NotBlank(message = "이메일은 필수 입력값입니다.")
-            private String email;
-        
-            public RegisterUserRequest(
-                    String username,
-                    String password,
-                    String confirmPassword,
-                    String nickname,
-                    String phone,
-                    String email
-            ) {
-                this.username = username;
-                this.password = password;
-                this.confirmPassword = confirmPassword;
-                this.nickname = nickname;
-                this.phone = phone;
-                this.email = email;
-                this.validateSelf();
-            }
-        
-            public User toEntity(PasswordEncoder passwordEncoder) {
-                return User.builder()
-                        .username(username)
-                        .password(passwordEncoder.encode(password))
-                        .nickname(nickname)
-                        .phone(phone)
-                        .email(email)
-                        .role(Role.USER)
-                        .build();
-            }
-        
-        }
-        ```
-        
-        - 여기서 중점적으로 봐야할 것은 SelfValidating<RegisterUserRequest>이다.
-        - 생성자를 통해 `this.validateSelf();` 사용하여 유효성 검사를 실행한다.
-    - SelfValidating.java
-        
-        ```java
-        public abstract class SelfValidating<T> {
-        
-            private Validator validator;
-        
-            public SelfValidating() {
-                ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
-                validator = factory.getValidator();
-            }
-        
-            /**
-             * Evaluates all Bean Validations on the attributes of this
-             * instance.
-             */
-            protected void validateSelf() {
-                Set<ConstraintViolation<T>> violations = validator.validate((T) this);
-                if (!violations.isEmpty()) {
-                    throw new ConstraintViolationException(violations);
-                }
-            }
-        
-        }
-        ```
-        
-        - **객체의 유효성을 생성 시점에서 확실하게 보장하고 싶은 경우를 위해 사용한다.**
-        - 해당 클래스에서 모든 Bean Validation 어노테이션을 평가하는 메서드입니다. **`validator`**를 사용하여 객체(**`this`**)의 속성에 대한 유효성을 평가하고, 어긴 항목이 있다면 **`ConstraintViolationException`** 예외를 throw합니다.
-    - UserRegisterController .java
-        
-        ```java
-        @RestController
-        @RequiredArgsConstructor
-        @RequestMapping("/users")
-        public class UserRegisterController {
-        
-            private final RegisterUserUseCase registerUserUseCase;
-            private final UserResponseMapper userResponseMapper;
-        
-            @PostMapping("/register")
-            public ResponseEntity<ReturnObject> registerUser(
-                    @RequestBody RegisterUserRequest registerUserRequest
-            ) {
-                User user = registerUserUseCase.registerUser(registerUserRequest);
-                RegisterUserResponse response = userResponseMapper.mapToRegisterUserResponse(user);
-        
-                ReturnObject returnObject = ReturnObject.builder()
-                        .success(true)
-                        .data(response)
-                        .build();
-        
-                return ResponseEntity.status(HttpStatus.OK).body(returnObject);
-            }
-        
-        }
-        ```
-        
-        - Controller에서는 UseCase를 받아서 사용한다.
-        - 도메인 로직이 잘 돌아갔다면 Mapper를 이용하여 ResponseDTO로 변환해서 반환해준다.
-        - ReturnObject는 API Repsonse을 더 깔끔하게 보여주기 위해 작성한 객체입니다.
-    - RegisterUserUseCase.java
-        
-        ```java
-        public interface RegisterUserUseCase {
-            User registerUser(RegisterUserRequest registerUserRequest);
-        }
-        ```
-        
-        - 인터페이스로 작성하여 Service에서 UseCase를 implements하여 사용한다.
-    - RegisterUserService .java
-        
-        ```java
-        @Slf4j
-        @UseCase
-        @Transactional
-        @RequiredArgsConstructor
-        public class RegisterUserService implements RegisterUserUseCase {
-        
-            private final SaveUserStatePort saveUserStatePort;
-            private final PasswordEncoder passwordEncoder;
-        
-            @Override
-            @Transactional
-            public User registerUser(RegisterUserRequest registerUserCommand) {
-                if (!Objects.equals(registerUserCommand.getPassword(), registerUserCommand.getConfirmPassword())) {
-                    throw new RuntimeException("두개의 비밀번호가 맞지 않습니다.");
-                }
-        
-                User saveUser = registerUserCommand.toEntity(passwordEncoder);
-                saveUserStatePort.saveUser(saveUser);
-        
-                return saveUser;
-            }
-        
-        }
-        ```
-        
-        - Usecase의 구현체인 Service에서 비즈니스 로직을 처리한다.
-        - 아웃고잉 포트인 SaveUserStatePort를 호출한다.
-        - `User saveUser = registerUserCommand.toEntity(passwordEncoder);` → 여기는 어떻게 해결해야할지 생각중이다. 분명 user로 바꿔주고 Port에 넣어주는게 맞다고 생각하지만 변환하는 과정이 저렇게 해도 되는지는 의문이다.
-    - SaveUserStatePort.java
-        
-        ```java
-        public interface SaveUserStatePort {
-            void saveUser(User user);
-        }
-        ```
-        
-- 예시 코드 (User Register)
-    - RegisterUserRequest.java
-        
-        ```java
-        @Value
-        @EqualsAndHashCode(callSuper = false)
-        public class RegisterUserRequest extends SelfValidating<RegisterUserRequest> {
-        
-            @Pattern(
-                    regexp = "^[a-z0-9]{4,20}$",
-                    message = "아이디는 영어 소문자와 숫자만 사용하여 4~20자리여야 합니다."
-            )
-            @NotBlank(message = "아이디은 필수 입력 값입니다.")
-            private String username;
-        
-            @Pattern(
-                    regexp = "(?=.*[0-9])(?=.*[a-zA-Z])(?=.*\\W)(?=\\S+$).{8,16}",
-                    message = "비밀번호는 숫자,문자,특수문자를 포함한 6~18로 입력해주세요."
-            )
-            @NotBlank(message = "비밀번호는 필수 입력 값입니다.")
-            private String password;
-        
-            @NotBlank(message = "비밀번호 확인은 필수 입력 값입니다.")
-            private String confirmPassword;
-        
-            @Size(min = 2, max = 12, message = "아이디는 2 ~ 12 사이로 입력해주세요.")
-            @NotBlank(message = "닉네임은 필수 입력값입니다.")
-            private String nickname;
-        
-            @Pattern(
-                    regexp = "^(01[016789]{1})-?[0-9]{3,4}-?[0-9]{4}$",
-                    message = "전화번호 형식이 올바르지 않습니다."
-            )
-            @NotBlank(message = "전화번호는 필수 입력값입니다.")
-            private String phone;
-        
-            @Email
-            @NotBlank(message = "이메일은 필수 입력값입니다.")
-            private String email;
-        
-            public RegisterUserRequest(
-                    String username,
-                    String password,
-                    String confirmPassword,
-                    String nickname,
-                    String phone,
-                    String email
-            ) {
-                this.username = username;
-                this.password = password;
-                this.confirmPassword = confirmPassword;
-                this.nickname = nickname;
-                this.phone = phone;
-                this.email = email;
-                this.validateSelf();
-            }
-        
-            public User toEntity(PasswordEncoder passwordEncoder) {
-                return User.builder()
-                        .username(username)
-                        .password(passwordEncoder.encode(password))
-                        .nickname(nickname)
-                        .phone(phone)
-                        .email(email)
-                        .role(Role.USER)
-                        .build();
-            }
-        
-        }
-        ```
-        
-        - 여기서 중점적으로 봐야할 것은 SelfValidating<RegisterUserRequest>이다.
-        - 생성자를 통해 `this.validateSelf();` 사용하여 유효성 검사를 실행한다.
-    - SelfValidating.java
-        
-        ```java
-        public abstract class SelfValidating<T> {
-        
-            private Validator validator;
-        
-            public SelfValidating() {
-                ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
-                validator = factory.getValidator();
-            }
-        
-            /**
-             * Evaluates all Bean Validations on the attributes of this
-             * instance.
-             */
-            protected void validateSelf() {
-                Set<ConstraintViolation<T>> violations = validator.validate((T) this);
-                if (!violations.isEmpty()) {
-                    throw new ConstraintViolationException(violations);
-                }
-            }
-        
-        }
-        ```
-        
-        - **객체의 유효성을 생성 시점에서 확실하게 보장하고 싶은 경우를 위해 사용한다.**
-        - 해당 클래스에서 모든 Bean Validation 어노테이션을 평가하는 메서드입니다. **`validator`**를 사용하여 객체(**`this`**)의 속성에 대한 유효성을 평가하고, 어긴 항목이 있다면 **`ConstraintViolationException`** 예외를 throw합니다.
-    - UserRegisterController .java
-        
-        ```java
-        @RestController
-        @RequiredArgsConstructor
-        @RequestMapping("/users")
-        public class UserRegisterController {
-        
-            private final RegisterUserUseCase registerUserUseCase;
-            private final UserResponseMapper userResponseMapper;
-        
-            @PostMapping("/register")
-            public ResponseEntity<ReturnObject> registerUser(
-                    @RequestBody RegisterUserRequest registerUserRequest
-            ) {
-                User user = registerUserUseCase.registerUser(registerUserRequest);
-                RegisterUserResponse response = userResponseMapper.mapToRegisterUserResponse(user);
-        
-                ReturnObject returnObject = ReturnObject.builder()
-                        .success(true)
-                        .data(response)
-                        .build();
-        
-                return ResponseEntity.status(HttpStatus.OK).body(returnObject);
-            }
-        
-        }
-        ```
-        
-        - Controller에서는 UseCase를 받아서 사용한다.
-        - 도메인 로직이 잘 돌아갔다면 Mapper를 이용하여 ResponseDTO로 변환해서 반환해준다.
-        - ReturnObject는 API Repsonse을 더 깔끔하게 보여주기 위해 작성한 객체입니다.
-    - RegisterUserUseCase.java
-        
-        ```java
-        public interface RegisterUserUseCase {
-            User registerUser(RegisterUserRequest registerUserRequest);
-        }
-        ```
-        
-        - 인터페이스로 작성하여 Service에서 UseCase를 implements하여 사용한다.
-    - RegisterUserService .java
-        
-        ```java
-        @Slf4j
-        @UseCase
-        @Transactional
-        @RequiredArgsConstructor
-        public class RegisterUserService implements RegisterUserUseCase {
-        
-            private final SaveUserStatePort saveUserStatePort;
-            private final PasswordEncoder passwordEncoder;
-        
-            @Override
-            @Transactional
-            public User registerUser(RegisterUserRequest registerUserCommand) {
-                if (!Objects.equals(registerUserCommand.getPassword(), registerUserCommand.getConfirmPassword())) {
-                    throw new RuntimeException("두개의 비밀번호가 맞지 않습니다.");
-                }
-        
-                User saveUser = registerUserCommand.toEntity(passwordEncoder);
-                saveUserStatePort.saveUser(saveUser);
-        
-                return saveUser;
-            }
-        
-        }
-        ```
-        
-        - Usecase의 구현체인 Service에서 비즈니스 로직을 처리한다.
-        - 아웃고잉 포트인 SaveUserStatePort를 호출한다.
-        - `User saveUser = registerUserCommand.toEntity(passwordEncoder);` → 여기는 어떻게 해결해야할지 생각중이다. 분명 user로 바꿔주고 Port에 넣어주는게 맞다고 생각하지만 변환하는 과정이 저렇게 해도 되는지는 의문이다.
-    - SaveUserStatePort.java
-        
-        ```java
-        public interface SaveUserStatePort {
-            void saveUser(User user);
-        }
-        ```
-        
-        - 인터페이스로 작성하여 Adapter에서 Port를 implements하여 사용한다.
-    - UserPersistenceAdapterState .java
-        
-        ```java
-        @RequiredArgsConstructor
-        @PersistenceAdapter
-        public class UserPersistenceAdapterState implements SaveUserStatePort {
-        
-            private final UserJpaRepo userJpaRepo;
-            private final UserPersistenceMapper userPersistenceMapper;
-        
-            @Override
-            @Transactional
-            public void saveUser(User user) {
-                userJpaRepo.save(userPersistenceMapper.mapToJpaEntity(user));
-            }
-        }
-        ```
-        
-        - Port의 구현체인 Adapter에서 비즈니스 로직을 처리한다.
-        - UserJpaRepo는 간단하게 JpaRepository를 Extends 받고 있다.
-        - UserPersistenceMapper는 밑에서 설명하겠다.
-    - UserPersistenceMapper.java
-        
-        ```java
-        @Component
-        public class UserPersistenceMapper {
-        
-            public User mapToDomainEntity(UserJpaEntity userJpaEntity) {
-                List<MatePost> matePosts = mapMatePostJpaEntitiesToDomainEntities(userJpaEntity.getMatePosts());
-        
-                return User.builder()
-                         .userId(userJpaEntity.getId())
-                         .username(userJpaEntity.getUsername())
-                         .password(userJpaEntity.getPassword())
-                         .nickname(userJpaEntity.getNickname())
-                         .phone(userJpaEntity.getPhone())
-                         .email(userJpaEntity.getEmail())
-                         .role(userJpaEntity.getRole())
-                         .matePosts(matePosts)
-                         .build();
-            }
-        
-            private List<MatePost> mapMatePostJpaEntitiesToDomainEntities(List<MatePostJpaEntity> matePostJpaEntities) {
-                List<MatePost> matePosts = new ArrayList<>();
-                for (MatePostJpaEntity matePostJpaEntity : matePostJpaEntities) {
-                    MatePost matePost = MatePost.builder()
-                            .matePostId(matePostJpaEntity.getId())
-                            .title(matePostJpaEntity.getTitle())
-                            .content(matePostJpaEntity.getContent())
-                            .gym(matePostJpaEntity.getGym())
-                            .view(matePostJpaEntity.getView())
-                            .startTime(matePostJpaEntity.getStartTime())
-                            .endTime(matePostJpaEntity.getEndTime())
-                            .build();
-        
-                    matePosts.add(matePost);
-                }
-                return matePosts;
-            }
-        
-            public UserJpaEntity mapToJpaEntity(User user) {
-                List<MatePostJpaEntity> matePostJpaEntities = new ArrayList<>();
-                for (MatePost matePost : matePosts) {
-                    matePostJpaEntities.add(matePost.toJpaEntity());
-                }
-        
-                return UserJpaEntity.builder()
-                        .id(userId)
-                        .username(username)
-                        .password(password)
-                        .nickname(nickname)
-                        .phone(phone)
-                        .email(email)
-                        .role(role)
-                        .matePosts(matePostJpaEntities)
-                        .build();
-            }
-        
-        }
-        ```
-        
-        - `mapToDomainEntity` → 클래스 명 그대로 UserJpaEntity를 User로 변환해주는 역할을 한다.
-        - `mapToJpaEntity`→ 클래스 명 그대로 User를 UserJpaEntity로 변환해주는 역할을 한다.
-        - 이렇게 두개의 변환 메소드를 두는 이유는 제가 생각했을 땐 계층에 분리를 위함인 것 같습니다.
-        - 또한, 실제 DB에 저장되는 JPA Entity와 비지니스 로직을 처리하기 위한 Domain Entity가 분리되어 있기 때문이다.
     
+- 예시 코드 (User Register)
+    - RegisterUserRequest.java
+        
+        ```java
+        @Value
+        @EqualsAndHashCode(callSuper = false)
+        public class RegisterUserRequest extends SelfValidating<RegisterUserRequest> {
+        
+            @Pattern(
+                    regexp = "^[a-z0-9]{4,20}$",
+                    message = "아이디는 영어 소문자와 숫자만 사용하여 4~20자리여야 합니다."
+            )
+            @NotBlank(message = "아이디은 필수 입력 값입니다.")
+            private String username;
+        
+            @Pattern(
+                    regexp = "(?=.*[0-9])(?=.*[a-zA-Z])(?=.*\\W)(?=\\S+$).{8,16}",
+                    message = "비밀번호는 숫자,문자,특수문자를 포함한 6~18로 입력해주세요."
+            )
+            @NotBlank(message = "비밀번호는 필수 입력 값입니다.")
+            private String password;
+        
+            @NotBlank(message = "비밀번호 확인은 필수 입력 값입니다.")
+            private String confirmPassword;
+        
+            @Size(min = 2, max = 12, message = "아이디는 2 ~ 12 사이로 입력해주세요.")
+            @NotBlank(message = "닉네임은 필수 입력값입니다.")
+            private String nickname;
+        
+            @Pattern(
+                    regexp = "^(01[016789]{1})-?[0-9]{3,4}-?[0-9]{4}$",
+                    message = "전화번호 형식이 올바르지 않습니다."
+            )
+            @NotBlank(message = "전화번호는 필수 입력값입니다.")
+            private String phone;
+        
+            @Email
+            @NotBlank(message = "이메일은 필수 입력값입니다.")
+            private String email;
+        
+            public RegisterUserRequest(
+                    String username,
+                    String password,
+                    String confirmPassword,
+                    String nickname,
+                    String phone,
+                    String email
+            ) {
+                this.username = username;
+                this.password = password;
+                this.confirmPassword = confirmPassword;
+                this.nickname = nickname;
+                this.phone = phone;
+                this.email = email;
+                this.validateSelf();
+            }
+        
+            public User toEntity(PasswordEncoder passwordEncoder) {
+                return User.builder()
+                        .username(username)
+                        .password(passwordEncoder.encode(password))
+                        .nickname(nickname)
+                        .phone(phone)
+                        .email(email)
+                        .role(Role.USER)
+                        .build();
+            }
+        
+        }
+        ```
+        
+        - 여기서 중점적으로 봐야할 것은 SelfValidating<RegisterUserRequest>이다.
+        - 생성자를 통해 `this.validateSelf();` 사용하여 유효성 검사를 실행한다.
+    - SelfValidating.java
+        
+        ```java
+        public abstract class SelfValidating<T> {
+        
+            private Validator validator;
+        
+            public SelfValidating() {
+                ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+                validator = factory.getValidator();
+            }
+        
+            /**
+             * Evaluates all Bean Validations on the attributes of this
+             * instance.
+             */
+            protected void validateSelf() {
+                Set<ConstraintViolation<T>> violations = validator.validate((T) this);
+                if (!violations.isEmpty()) {
+                    throw new ConstraintViolationException(violations);
+                }
+            }
+        
+        }
+        ```
+        
+        - **객체의 유효성을 생성 시점에서 확실하게 보장하고 싶은 경우를 위해 사용한다.**
+        - 해당 클래스에서 모든 Bean Validation 어노테이션을 평가하는 메서드입니다. **`validator`**를 사용하여 객체(**`this`**)의 속성에 대한 유효성을 평가하고, 어긴 항목이 있다면 **`ConstraintViolationException`** 예외를 throw합니다.
+    - UserRegisterController .java
+        
+        ```java
+        @RestController
+        @RequiredArgsConstructor
+        @RequestMapping("/users")
+        public class UserRegisterController {
+        
+            private final RegisterUserUseCase registerUserUseCase;
+            private final UserResponseMapper userResponseMapper;
+        
+            @PostMapping("/register")
+            public ResponseEntity<ReturnObject> registerUser(
+                    @RequestBody RegisterUserRequest registerUserRequest
+            ) {
+                User user = registerUserUseCase.registerUser(registerUserRequest);
+                RegisterUserResponse response = userResponseMapper.mapToRegisterUserResponse(user);
+        
+                ReturnObject returnObject = ReturnObject.builder()
+                        .success(true)
+                        .data(response)
+                        .build();
+        
+                return ResponseEntity.status(HttpStatus.OK).body(returnObject);
+            }
+        
+        }
+        ```
+        
+        - Controller에서는 UseCase를 받아서 사용한다.
+        - 도메인 로직이 잘 돌아갔다면 Mapper를 이용하여 ResponseDTO로 변환해서 반환해준다.
+        - ReturnObject는 API Repsonse을 더 깔끔하게 보여주기 위해 작성한 객체입니다.
+    - RegisterUserUseCase.java
+        
+        ```java
+        public interface RegisterUserUseCase {
+            User registerUser(RegisterUserRequest registerUserRequest);
+        }
+        ```
+        
+        - 인터페이스로 작성하여 Service에서 UseCase를 implements하여 사용한다.
+    - RegisterUserService .java
+        
+        ```java
+        @Slf4j
+        @UseCase
+        @Transactional
+        @RequiredArgsConstructor
+        public class RegisterUserService implements RegisterUserUseCase {
+        
+            private final SaveUserStatePort saveUserStatePort;
+            private final PasswordEncoder passwordEncoder;
+        
+            @Override
+            @Transactional
+            public User registerUser(RegisterUserRequest registerUserCommand) {
+                if (!Objects.equals(registerUserCommand.getPassword(), registerUserCommand.getConfirmPassword())) {
+                    throw new RuntimeException("두개의 비밀번호가 맞지 않습니다.");
+                }
+        
+                User saveUser = registerUserCommand.toEntity(passwordEncoder);
+                saveUserStatePort.saveUser(saveUser);
+        
+                return saveUser;
+            }
+        
+        }
+        ```
+        
+        - Usecase의 구현체인 Service에서 비즈니스 로직을 처리한다.
+        - 아웃고잉 포트인 SaveUserStatePort를 호출한다.
+        - `User saveUser = registerUserCommand.toEntity(passwordEncoder);` → 여기는 어떻게 해결해야할지 생각중이다. 분명 user로 바꿔주고 Port에 넣어주는게 맞다고 생각하지만 변환하는 과정이 저렇게 해도 되는지는 의문이다.
     - SaveUserStatePort.java
         
         ```java
@@ -519,7 +244,7 @@
             void saveUser(User user);
         }
         ```
-        
+    
         - 인터페이스로 작성하여 Adapter에서 Port를 implements하여 사용한다.
     - UserPersistenceAdapterState .java
         
