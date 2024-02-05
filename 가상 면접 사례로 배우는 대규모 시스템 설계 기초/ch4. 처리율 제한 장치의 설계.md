@@ -50,7 +50,7 @@ API 요청 횟수가 제한 장치에 정의된 임계치(threshould)를 넘어�
     - X-Ratelimit-Limit : 매 윈도마다 클라이언트가 전송할 수 있는 요청의 수
     - X-Ratelimit-Retry-After : 한도 제한에 걸리지 않으려면 몇 초 뒤에 요청을 다시 보내야하는지 알림
 
-![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/ee8ffeef-333e-486c-842a-73ee46ce3b12/431f1536-bef1-4c2d-895f-ec0f2b5735ba/Untitled.png)
+![image](https://github.com/taeyun1215/BookReview/assets/65766105/af4a7f04-488b-43d6-8d42-f76818e22e3d)
 
 1. 처리율 제한 규칙은 디스크에 보관, 작업 프로세스는 수시로 규칙을 디스크에서 읽어 캐시에 저장
 2. 클라이언트가 요청을 서버에 보내면 처리율 제한 미들웨어를 거침.
@@ -72,9 +72,8 @@ API 요청 횟수가 제한 장치에 정의된 임계치(threshould)를 넘어�
     - 레디스에서 카운터의 값을 읽는다.
     - counter +1 의 값이 임계치를 넘는지 본다.
     - 넘지 않는다면 레디스에 보관된 카운터 값을 1만큼 증가시킨다.
-        
-        ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/ee8ffeef-333e-486c-842a-73ee46ce3b12/8fbab73c-66e6-44c6-8d18-b8165b7f3eeb/Untitled.png)
-        
+        ![image](https://github.com/taeyun1215/BookReview/assets/65766105/78aa4bf6-38b7-43f4-867b-288f519c4109)
+
     - 경쟁 조건 문제를 해결하는 가장 널리 알려진 해결책은 Lock(락)이다. 하지만 락은 시스템 성능을 떨어뜨림, 해결책으로는 두가지 방법이 있다.
         - 루아 스크립트
         - 정렬집합이라 불리는 레디스 자료구조
@@ -82,9 +81,8 @@ API 요청 횟수가 제한 장치에 정의된 임계치(threshould)를 넘어�
     - Sticky Session
     - Session Clustering
     - Redis Session
-        
-        ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/ee8ffeef-333e-486c-842a-73ee46ce3b12/9ee27bbb-9d3e-4320-8fb7-d02440a850b7/Untitled.png)
-        
+        ![image](https://github.com/taeyun1215/BookReview/assets/65766105/5543d121-e205-48bd-9f98-9847a03c62af)
+
         - Redis와 같은 중앙 집중형 데이터 저장소를 사용한다.
 
 ### 마무리
