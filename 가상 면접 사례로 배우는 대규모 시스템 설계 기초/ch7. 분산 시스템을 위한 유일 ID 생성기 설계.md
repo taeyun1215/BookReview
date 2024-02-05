@@ -20,8 +20,8 @@
 - 유일성이 보장되는 ID를 만드는 방법을 먼저 알아보자
 1. 다중 마스터 복제
     
-    ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/ee8ffeef-333e-486c-842a-73ee46ce3b12/230928a2-083d-484e-a942-1b2a4930d87f/Untitled.png)
-    
+    ![image](https://github.com/taeyun1215/BookReview/assets/65766105/fe96898e-3193-4080-b42b-b39e2247e9cc)
+
     - 데이터베이스 auto_increment기능을 활용
     - k개의 데이터베이스 서버에 대해 id값을 k만큼 증가시킴
         - 데이터베이스 서버 1 : 1,3,5 ...
@@ -51,7 +51,7 @@
         - 티켓 서버가 SPOF가 된다.
 4. 트위터 스노플레이크 접근법
     
-    ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/ee8ffeef-333e-486c-842a-73ee46ce3b12/cd0576f3-99c0-4be2-9020-7698b8b2069e/Untitled.png)
+    ![image](https://github.com/taeyun1215/BookReview/assets/65766105/dec921b8-d611-4565-986f-a0531f8a5f33)
     
     - **사인(sign) 비트**
         - 1비트를 할당.
@@ -71,7 +71,7 @@
     
     ### 상세 설계
     
-    ![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/ee8ffeef-333e-486c-842a-73ee46ce3b12/d6425f93-fd18-4a03-8882-ec01ad0fd30f/Untitled.png)
+    ![Uploading image.png…]()
     
     - 스노플레이크에서 타임스탬프가 시간이 흐름에 따라 점점 큰 값을 갖게 되므로, 정렬 가능
     - 어떤 서버가 같은 밀리초 동안 하나 이상의 ID를 만들어 낸 경우에만 0보다 큰 값을 갖게 된다.
